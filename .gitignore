@@ -1,0 +1,13 @@
+# Supabase CLI local working artifacts — never commit
+supabase/.branches/
+supabase/.temp/
+
+# Secrets / local env — never commit (use the Supabase secret store / env)
+.env
+.env.*
+supabase/.env
+supabase/functions/**/.env
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
