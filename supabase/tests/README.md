@@ -39,3 +39,30 @@ deno test supabase/functions/api/api.test.ts
 > assertions passed) and the validation/routing logic via an equivalent Node harness
 > (11/11). The end-to-end Edge Function (`index.ts`, which imports supabase-js from
 > esm.sh and calls Supabase Auth) is exercised by the operator via `supabase functions serve`.
+
+## 3. Server E2E (live function + DB + RLS over HTTP)
+
+`e2e.test.ts` drives the **running** Edge Function against the local Supabase stack —
+real auth, real Postgres, real RLS — proving the v1.6.0 contract end to end. It creates
+two users via the local service-role admin API (firing `handle_new_user` → two families),
+mints each user's `authenticated` JWT (HS256-signed with the local JWT secret — dev-only,
+no OAuth, no committed secrets), then over HTTP: runs all five actions for family A and
+asserts family B cannot read/write A's rows, a forged body `family_id` lands in B not A,
+the `{ status, data }` envelope, strict unknown-key rejection, and that an unauthenticated
+request is refused.
+
+**Prereqs:** Docker, Supabase CLI, Deno.
+
+```bash
+bash supabase/tests/run_e2e.sh
+```
+
+The runner is idempotent: `supabase start` → `supabase db reset` → ensures the function is
+served → exports `SUPABASE_URL` / `*_KEY` / `JWT_SECRET` from `supabase status` (never
+echoed) → `deno test`. To run the harness by hand against an already-up stack, export those
+four env vars (plus optional `FUNCTION_URL`) and run
+`deno test --allow-net --allow-env supabase/tests/e2e.test.ts`.
+
+> The dev JWT-minting algorithm was cross-checked offline against a standard HS256 verifier
+> (the scheme GoTrue uses): correct `sub`/`role`/`aud`/`exp`, rejected under a wrong secret.
+> The full HTTP run requires Docker + Deno on your machine (it can't run in the scaffolding sandbox).
