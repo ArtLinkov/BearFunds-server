@@ -1,0 +1,5 @@
+# Supabase project config (CLI-shaped). Edit project_id when you `supabase link`.
+project_id = "bearfunds"
+
+[functions.api]
+verify_jwt = true
