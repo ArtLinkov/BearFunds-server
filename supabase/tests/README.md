@@ -51,11 +51,22 @@ asserts family B cannot read/write A's rows, a forged body `family_id` lands in 
 the `{ status, data }` envelope, strict unknown-key rejection, and that an unauthenticated
 request is refused.
 
-**Prereqs:** Docker, Supabase CLI, Deno.
+**Prereqs:** Docker, Supabase CLI, Deno (on Windows: `scoop install supabase deno`).
 
 ```bash
-bash supabase/tests/run_e2e.sh
+bash supabase/tests/run_e2e.sh          # macOS / Linux / Git Bash
 ```
+
+On **Windows PowerShell**, use the native runner — the Scoop-installed CLI is on the
+PowerShell PATH, not bash's — which does the same thing without needing bash:
+
+```powershell
+./supabase/tests/run_e2e.ps1
+```
+
+> With `verify_jwt = true`, the Supabase platform answers a no-token request with its own
+> `{ "msg": ... }` 401 *before* the function runs — so a bare `curl` smoke test returns that,
+> not our `{ status, data }` envelope. That's the auth gate working; the harness accepts it.
 
 The runner is idempotent: `supabase start` → `supabase db reset` → ensures the function is
 served → exports `SUPABASE_URL` / `*_KEY` / `JWT_SECRET` from `supabase status` (never

@@ -86,8 +86,10 @@ Deno.test("server E2E — v1.6.0 contract + cross-family isolation", async (t) =
 
   await t.step("unauthenticated request is rejected", async () => {
     const r = await api(null, { action: "read", table: "WALLETS" });
-    assertEquals(r.status, "error");
-    assert(r.http === 401 || r.http === 400, `expected 401/400, got ${r.http}`);
+    // With verify_jwt=true the platform rejects before our function (body may be {msg});
+    // with verify_jwt=false our function answers with the {status:"error"} envelope. Accept both.
+    assert(r.http === 401 || r.http === 400, `expected 401/400 for a no-token request, got ${r.http}`);
+    if (r.status !== undefined) assertEquals(r.status, "error");
   });
 
   await t.step("A: batchCreate -> success, family_id server-derived", async () => {
