@@ -46,3 +46,14 @@ Brain Reference docs (under `Areas/BearFunds/`):
 2. Scaffold the Supabase project layout: `supabase/` (migrations + RLS policies + Edge Functions) and `contracts/` (the canonical contract), with tests for action handlers and RLS isolation.
 
 Both steps go through the `0_AI_INSTRUCTIONS.md` protocol (Impact Analysis → Approval) before code.
+
+
+## Tool reliability (file writes)
+
+The Edit/Write tools can silently truncate a file mid-write while reporting success. Two known triggers, often combined: (1) multi-byte / non-ASCII characters in the content (em dashes, smart quotes, arrows, emoji), where the write is cut at the offending character; and (2) large files, very long lines, or content near the end. The Edit tool rewrites the whole file, so a stray non-ASCII character anywhere in it - not only in the change - can trip this.
+
+Policy (prevention-first; mirrors the brain vault CLAUDE.md):
+- Default to writing through bash (a heredoc, or a Python literal-replace) for anything beyond a tiny, ASCII-only, surgical edit. Use the Edit tool only for small ASCII-only changes.
+- Keep all authored content strict ASCII - no em dashes, smart quotes, arrows, or emoji in code or comments.
+- Verify every write immediately (wc -l plus tail, or grep for the expected closing section). A "success" tool result is not proof; the file on disk is.
+- If a write did truncate, recover from git (tracked files) or rewrite via heredoc (new files), then re-verify.
