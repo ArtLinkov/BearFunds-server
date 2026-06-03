@@ -153,4 +153,19 @@ Deno.test("server E2E — v1.6.0 contract + cross-family isolation", async (t) =
     const a = await api(aliceJwt, { action: "read", table: "WALLETS", since: "1970-01-01T00:00:00Z" });
     assert(rows(a).some((w) => w.id === wA), "Bob's wipe must not clear Alice's wallet");
   });
+
+  await t.step("wipe MEMBERS preserves the account-linking member (tenancy survives)", async () => {
+    const before = await api(aliceJwt, { action: "read", table: "MEMBERS", since: "1970-01-01T00:00:00Z" });
+    assert(rows(before).some((m) => (m as Record<string, unknown>).user_id === aliceId), "linking member should exist before wipe");
+
+    const w = await api(aliceJwt, { action: "wipe", table: "MEMBERS", isTest: true });
+    assertEquals(w.status, "success");
+
+    const after = await api(aliceJwt, { action: "read", table: "MEMBERS", since: "1970-01-01T00:00:00Z" });
+    assert(rows(after).some((m) => (m as Record<string, unknown>).user_id === aliceId), "linking member must survive a MEMBERS wipe");
+
+    // Tenancy still resolves after the wipe: a follow-up write must succeed.
+    const c = await api(aliceJwt, { action: "batchUpsert", table: "CATEGORIES", rows: [{ id: `c_after_${RUN}`, name: "After Wipe", type: "expense" }] });
+    assertEquals(c.status, "success");
+  });
 });

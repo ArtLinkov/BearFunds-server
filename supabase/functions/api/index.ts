@@ -48,8 +48,12 @@ function makeExecutor(supabase: SupabaseClient): DbExecutor {
       return data ?? [];
     },
     async wipe(table) {
-      const { count, error } = await supabase
-        .from(table).delete({ count: "exact" }).neq("id", "__never_matches__");
+      let q = supabase.from(table).delete({ count: "exact" }).neq("id", "__never_matches__");
+      // Never delete account-linking members (user_id set): that row establishes the
+      // caller's tenancy (auth_family_id reads it), so wiping it strands the user with no
+      // family. Only app-data members (user_id null) are test data. Other tables unaffected.
+      if (table === "members") q = q.is("user_id", null);
+      const { count, error } = await q;
       if (error) fail(error);
       return count ?? 0;
     },
