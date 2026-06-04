@@ -1,17 +1,16 @@
 <!--
-  Canonical: BearFunds-server · v1.6.0
+  Canonical: BearFunds-server · v1.6.1
   This repo is the canonical home for the shared client<->server Schema Contract
   (re-home decided in the brain's Sources of Truth, 2026-06-01; executed 2026-06-02).
   It is NOT casually editable. Any change is a deliberate version bump with a one-line
   rationale; the operator drops the versioned copy into the client (downstream consumer).
-  v1.5.0 -> v1.6.0 rationale: introduce real auth (Bearer JWT) + server-derived tenancy
-  (family_id, FAMILIES) and align MEMBERS.role to the implementation (admin/member, brain Q7).
+  v1.6.1: removed the isDirty global column note - the client retired the transient flag; the Mutation outbox is the sole pending-sync signal (L4 Stage 2).
 -->
-<SchemaContract version="1.6.0">
+<SchemaContract version="1.6.1">
   <Meta>
     <Description>Immutable Source of Truth for Backend API and Database Schema</Description>
     <Usage>Paste this into the AI Context before generating any API or Data Fetching code.</Usage>
-    <Canonical>BearFunds-server · v1.6.0</Canonical>
+    <Canonical>BearFunds-server · v1.6.1</Canonical>
   </Meta>
 
   <Protocol>
@@ -86,7 +85,6 @@
       <Column key="updated_at" type="ISO String" description="Auto-managed by Server (trigger)." />
       <Column key="deleted" type="Boolean" description="Soft Delete flag." />
       <Column key="is_immutable" type="Boolean" description="System object protection." />
-      <Column key="isDirty" type="Boolean" sync="excluded" description="INTERNAL ONLY: Transient local flag used to trigger sync cycles. Never persisted to remote DB." />
     </GlobalColumns>
 
     <Table name="FAMILIES" key="FAMILIES">
