@@ -57,3 +57,6 @@ Policy (prevention-first; mirrors the brain vault CLAUDE.md):
 - Keep all authored content strict ASCII - no em dashes, smart quotes, arrows, or emoji in code or comments.
 - Verify every write immediately (wc -l plus tail, or grep for the expected closing section). A "success" tool result is not proof; the file on disk is.
 - If a write did truncate, recover from git (tracked files) or rewrite via heredoc (new files), then re-verify.
+
+Additional hazard (learned 2026-06-04): git commands run from the Cowork sandbox against this Windows-mounted repo can corrupt the git index (garbage entries, orphaned `index.lock` the sandbox cannot delete) - in one case from plain `git status`. From the sandbox, git is informational-only (`git --no-optional-locks status`, `diff`, `show`, `log`, `ls-files`); index-writing commands (`add`, `reset`, `checkout`, `restore`, `commit`) are operator-side. Recovery: working tree is unaffected; run `del .git\index.lock` (if present) then `git reset`.
+
