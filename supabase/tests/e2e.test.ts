@@ -47,7 +47,9 @@ async function mintJwt(sub: string): Promise<string> {
 }
 
 // ---- HTTP helpers ----------------------------------------------------------
-async function createUser(email: string, fullName: string): Promise<string> {
+async function createUser(email: string, fullName: string, avatarUrl?: string): Promise<string> {
+  const userMetadata: Record<string, string> = { full_name: fullName };
+  if (avatarUrl) userMetadata.avatar_url = avatarUrl;
   const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
     method: "POST",
     headers: {
@@ -55,7 +57,7 @@ async function createUser(email: string, fullName: string): Promise<string> {
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ email, password: crypto.randomUUID(), email_confirm: true, user_metadata: { full_name: fullName } }),
+    body: JSON.stringify({ email, password: crypto.randomUUID(), email_confirm: true, user_metadata: userMetadata }),
   });
   if (!r.ok) throw new Error(`admin createUser ${email} failed: ${r.status} ${await r.text()}`);
   return (await r.json()).id as string;
@@ -75,7 +77,8 @@ const rows = (r: ApiResult) => (r.data as Record<string, unknown>[]) ?? [];
 // ===========================================================================
 Deno.test("server E2E — v1.6.0 contract + cross-family isolation", async (t) => {
   // Two Google-equivalent sign-ins -> two families (via handle_new_user).
-  const aliceId = await createUser(`alice+${RUN}@bearfunds.test`, "Alice");
+  const ALICE_AVATAR = "https://example.test/alice.jpg";
+  const aliceId = await createUser(`alice+${RUN}@bearfunds.test`, "Alice", ALICE_AVATAR);
   const bobId = await createUser(`bob+${RUN}@bearfunds.test`, "Bob");
   const aliceJwt = await mintJwt(aliceId);
   const bobJwt = await mintJwt(bobId);
@@ -152,6 +155,14 @@ Deno.test("server E2E — v1.6.0 contract + cross-family isolation", async (t) =
     assertEquals(r.status, "success");
     const a = await api(aliceJwt, { action: "read", table: "WALLETS", since: "1970-01-01T00:00:00Z" });
     assert(rows(a).some((w) => w.id === wA), "Bob's wipe must not clear Alice's wallet");
+  });
+
+  await t.step("linking member is born with the sign-up avatar (0003)", async () => {
+    const r = await api(aliceJwt, { action: "read", table: "MEMBERS", since: "1970-01-01T00:00:00Z" });
+    assertEquals(r.status, "success");
+    const linking = rows(r).find((m) => (m as Record<string, unknown>).user_id === aliceId);
+    assert(linking, "Alice's linking member must exist");
+    assertEquals((linking as Record<string, unknown>).avatar, ALICE_AVATAR, "avatar_url metadata must land on the linking member");
   });
 
   await t.step("wipe MEMBERS preserves the account-linking member (tenancy survives)", async () => {
