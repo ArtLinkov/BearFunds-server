@@ -1,4 +1,4 @@
-// Schema Contract v1.6.0 — the single source of allowed tables, logical->physical
+// Schema Contract v1.7 — the single source of allowed tables, logical->physical
 // table mapping, and per-table writable column allowlists (snake_case logical keys).
 // Keys the client must never set (tenancy/sync-internal) are stripped, not errored.
 
@@ -39,7 +39,7 @@ export const WRITABLE: Record<LogicalTable, Set<string>> = {
     "default_category_id", "default_sub_category", "icon", "color",
   ]),
   MEMBERS: new Set([
-    ...GLOBAL_WRITABLE, "name", "role", "is_me", "avatar", "color",
+    ...GLOBAL_WRITABLE, "name", "role", "avatar", "color",
   ]),
 };
 

@@ -59,4 +59,6 @@ Policy (prevention-first; mirrors the brain vault CLAUDE.md):
 - If a write did truncate, recover from git (tracked files) or rewrite via heredoc (new files), then re-verify.
 
 Additional hazard (learned 2026-06-04): git commands run from the Cowork sandbox against this Windows-mounted repo can corrupt the git index (garbage entries, orphaned `index.lock` the sandbox cannot delete) - in one case from plain `git status`. From the sandbox, git is informational-only (`git --no-optional-locks status`, `diff`, `show`, `log`, `ls-files`); index-writing commands (`add`, `reset`, `checkout`, `restore`, `commit`) are operator-side. Recovery: working tree is unaffected; run `del .git\index.lock` (if present) then `git reset`.
+Stale-mount caveat: the sandbox's view of files freshly edited on the Windows side can show phantom truncation/NUL-padding (stale size cache); verify through the desktop-side Read tool before declaring corruption.
+
 

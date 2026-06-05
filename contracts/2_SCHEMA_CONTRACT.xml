@@ -1,16 +1,16 @@
 <!--
-  Canonical: BearFunds-server · v1.6.1
+  Canonical: BearFunds-server · v1.7
   This repo is the canonical home for the shared client<->server Schema Contract
   (re-home decided in the brain's Sources of Truth, 2026-06-01; executed 2026-06-02).
   It is NOT casually editable. Any change is a deliberate version bump with a one-line
   rationale; the operator drops the versioned copy into the client (downstream consumer).
-  v1.6.1: removed the isDirty global column note - the client retired the transient flag; the Mutation outbox is the sole pending-sync signal (L4 Stage 2).
+  v1.7: MEMBERS drops is_me (Me is client-derived: member.user_id === session uid). MEMBERS gains documented user_id column: server-derived, read-only, present in reads, ignored on writes.
 -->
-<SchemaContract version="1.6.1">
+<SchemaContract version="1.7">
   <Meta>
     <Description>Immutable Source of Truth for Backend API and Database Schema</Description>
     <Usage>Paste this into the AI Context before generating any API or Data Fetching code.</Usage>
-    <Canonical>BearFunds-server · v1.6.1</Canonical>
+    <Canonical>BearFunds-server · v1.7</Canonical>
   </Meta>
 
   <Protocol>
@@ -143,7 +143,7 @@
       <Column key="id" type="String" description="Primary Key, formatted as 'm001', or special cases for 'immutable' logic" />
       <Column key="name" type="String" />
       <Column key="role" type="String" description="'admin', 'member'" />
-      <Column key="is_me" type="Boolean" description="Flag for current user" />
+      <Column key="user_id" type="String" description="Auth-user link. SERVER-DERIVED, read-only: present in reads, ignored/stripped on writes. The client derives 'Me' as the member whose user_id equals the session uid." />
       <Column key="avatar" type="String" description="URL or Base64" />
       <Column key="color" type="String" />
     </Table>

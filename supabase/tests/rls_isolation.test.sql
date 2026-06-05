@@ -12,7 +12,7 @@ insert into auth.users (id, email, raw_user_meta_data) values
 -- Bootstrap: each user got a family + one admin member.
 do $$ begin
   assert (select count(*) from public.families) = 2, 'expected 2 families from signup';
-  assert (select count(*) from public.members where role = 'admin' and is_me) = 2, 'expected 2 admin members';
+  assert (select count(*) from public.members where role = 'admin' and user_id is not null) = 2, 'expected 2 admin linking members';
   assert (select role from public.members where user_id = '00000000-0000-0000-0000-00000000000a') = 'admin', 'Alice should be admin';
 end $$;
 
