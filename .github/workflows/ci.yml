@@ -1,0 +1,55 @@
+# Server CI gate (playbook L6, phase 1).
+# unit:        pure contract logic (action routing + boundary validation), no stack.
+# integration: real local Supabase stack on the runner -- migrations, RLS
+#              isolation suite (virgin db, straight after reset), then the
+#              HTTP E2E harness. No repo secrets: the CLI generates local
+#              keys at runtime and run_e2e.sh reads them without echoing.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Edge Function action/validation suite
+        run: deno test supabase/functions/api/api.test.ts
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Apply migrations (virgin db)
+        run: supabase db reset
+
+      - name: RLS isolation suite
+        run: bash supabase/tests/run_rls.sh
+
+      - name: E2E harness (live function + DB + RLS over HTTP)
+        run: bash supabase/tests/run_e2e.sh
