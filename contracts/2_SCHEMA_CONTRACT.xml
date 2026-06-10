@@ -1,16 +1,16 @@
 <!--
-  Canonical: BearFunds-server · v1.7
+  Canonical: BearFunds-server · v1.8
   This repo is the canonical home for the shared client<->server Schema Contract
   (re-home decided in the brain's Sources of Truth, 2026-06-01; executed 2026-06-02).
   It is NOT casually editable. Any change is a deliberate version bump with a one-line
   rationale; the operator drops the versioned copy into the client (downstream consumer).
-  v1.7: MEMBERS drops is_me (Me is client-derived: member.user_id === session uid). MEMBERS gains documented user_id column: server-derived, read-only, present in reads, ignored on writes.
+  v1.8: CATEGORIES gains an optional 'description' column (free-text Notes/Memo), mirroring WALLETS.description. Additive and nullable; pre-bump rows parse fine via OptionalString.
 -->
-<SchemaContract version="1.7">
+<SchemaContract version="1.8">
   <Meta>
     <Description>Immutable Source of Truth for Backend API and Database Schema</Description>
     <Usage>Paste this into the AI Context before generating any API or Data Fetching code.</Usage>
-    <Canonical>BearFunds-server · v1.7</Canonical>
+    <Canonical>BearFunds-server · v1.8</Canonical>
   </Meta>
 
   <Protocol>
@@ -116,6 +116,7 @@
       <Column key="sub_categories" type="String" description="JSON Array or Comma-separated" />
       <Column key="icon" type="String" description="Emoji/Icon ID" />
       <Column key="color" type="String" description="Hex Code" />
+      <Column key="description" type="String" description="Notes/Memo, optional" />
     </Table>
 
     <Table name="WALLETS" key="WALLETS">
