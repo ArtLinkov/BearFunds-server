@@ -62,3 +62,5 @@ Additional hazard (learned 2026-06-04): git commands run from the Cowork sandbox
 Stale-mount caveat: the sandbox's view of files freshly edited on the Windows side can show phantom truncation/NUL-padding (stale size cache); verify through the desktop-side Read tool before declaring corruption.
 
 
+
+Execution-environment boundary (codified 2026-06-10): the Cowork sandbox is Linux with no browser and an allowlisted network. Proven sandbox-safe here: Postgres 16 RLS-isolation suites and pure-Node action/validation harnesses. Operator-side: `supabase functions serve` / live-function E2E, Deno-native test runs (deno.land is network-blocked), and anything that builds or drives the client app (its Windows `node_modules` cannot execute on Linux - see the client CLAUDE.md). Never `npm install` onto a Windows-mounted repo from the sandbox.
