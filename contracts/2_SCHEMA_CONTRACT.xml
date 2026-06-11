@@ -1,16 +1,16 @@
 <!--
-  Canonical: BearFunds-server · v1.8
+  Canonical: BearFunds-server · v1.9
   This repo is the canonical home for the shared client<->server Schema Contract
   (re-home decided in the brain's Sources of Truth, 2026-06-01; executed 2026-06-02).
   It is NOT casually editable. Any change is a deliberate version bump with a one-line
   rationale; the operator drops the versioned copy into the client (downstream consumer).
-  v1.8: CATEGORIES gains an optional 'description' column (free-text Notes/Memo), mirroring WALLETS.description. Additive and nullable; pre-bump rows parse fine via OptionalString.
+  v1.9 (BREAKING): sub-categories elevated to a first-class SUBCATEGORIES table. TRANSACTIONS.sub_category (text) -> sub_category_id (FK); ENTITIES.default_sub_category -> default_sub_category_id; CATEGORIES.sub_categories removed. Client and server move together; one-time migration backfills the FKs.
 -->
-<SchemaContract version="1.8">
+<SchemaContract version="1.9">
   <Meta>
     <Description>Immutable Source of Truth for Backend API and Database Schema</Description>
     <Usage>Paste this into the AI Context before generating any API or Data Fetching code.</Usage>
-    <Canonical>BearFunds-server · v1.8</Canonical>
+    <Canonical>BearFunds-server · v1.9</Canonical>
   </Meta>
 
   <Protocol>
@@ -100,7 +100,7 @@
       <Column key="currency" type="String" description="ISO (EUR, USD)" />
       <Column key="type" type="String" description="'income', 'expense'" />
       <Column key="category_id" type="String" description="FK -> Categories" />
-      <Column key="sub_category" type="String" description="Text value" />
+      <Column key="sub_category_id" type="String" description="FK -> SubCategories" />
       <Column key="entity_id" type="String" description="FK -> Entities" />
       <Column key="wallet_id" type="String" description="FK -> Wallets" />
       <Column key="member_id" type="String" description="FK -> Members" />
@@ -113,10 +113,16 @@
       <Column key="id" type="String" description="Primary Key, formatted as 'c001', or special cases for 'immutable' logic" />
       <Column key="name" type="String" description="Display Name" />
       <Column key="type" type="String" description="'income' or 'expense'" />
-      <Column key="sub_categories" type="String" description="JSON Array or Comma-separated" />
       <Column key="icon" type="String" description="Emoji/Icon ID" />
       <Column key="color" type="String" description="Hex Code" />
       <Column key="description" type="String" description="Notes/Memo, optional" />
+    </Table>
+
+    <Table name="SUBCATEGORIES" key="SUBCATEGORIES">
+      <Column key="id" type="String" description="Primary Key, formatted as 'sc001', or special cases for 'immutable' logic" />
+      <Column key="category_id" type="String" description="FK -> Categories. Tenancy via the parent category." />
+      <Column key="name" type="String" description="Display Name" />
+      <Column key="is_default" type="Boolean" description="True for the permanent 'General' default of a user category (not renamable/deletable)." />
     </Table>
 
     <Table name="WALLETS" key="WALLETS">
@@ -135,7 +141,7 @@
       <Column key="aliases" type="String" description="JSON Array of alternate names" />
       <Column key="match_patterns" type="String" description="Regex strings" />
       <Column key="default_category_id" type="String" />
-      <Column key="default_sub_category" type="String" />
+      <Column key="default_sub_category_id" type="String" description="FK -> SubCategories" />
       <Column key="icon" type="String" />
       <Column key="color" type="String" />
     </Table>

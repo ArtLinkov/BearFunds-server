@@ -33,6 +33,25 @@ Deno.test("rejects unknown row key (strict contract)", () => {
   );
 });
 
+Deno.test("SUBCATEGORIES: strips server keys, keeps writable (category_id,name,is_default)", () => {
+  const req = parseRequest({
+    action: "batchUpsert", table: "SUBCATEGORIES",
+    rows: [{ id: "sc1", category_id: "c1", name: "General", is_default: true, family_id: "forged", updated_at: "2000", isDirty: true }],
+  });
+  if (req.action !== "batchUpsert") throw new Error("wrong action");
+  assertEquals(req.rows[0], { id: "sc1", category_id: "c1", name: "General", is_default: true });
+});
+
+Deno.test("SUBCATEGORIES: rejects unknown row key and read maps logical->physical", async () => {
+  assertThrows(
+    () => parseRequest({ action: "batchCreate", table: "SUBCATEGORIES", rows: [{ id: "sc1", bogus: 1 }] }),
+    ValidationError, "Unknown key 'bogus'",
+  );
+  const { db, calls } = fakeDb();
+  await runAction(parseRequest({ action: "read", table: "SUBCATEGORIES" }), db, { isTest: false });
+  assertEquals(calls[0].table, "subcategories");
+});
+
 Deno.test("rejects unknown action and unknown table", () => {
   assertThrows(() => parseRequest({ action: "delete", table: "WALLETS" }), ValidationError);
   assertThrows(() => parseRequest({ action: "read", table: "ACCOUNTS" }), ValidationError);

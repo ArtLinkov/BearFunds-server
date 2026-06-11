@@ -1,13 +1,14 @@
-// Schema Contract v1.7 — the single source of allowed tables, logical->physical
+// Schema Contract v1.9 — the single source of allowed tables, logical->physical
 // table mapping, and per-table writable column allowlists (snake_case logical keys).
 // Keys the client must never set (tenancy/sync-internal) are stripped, not errored.
 
 export type LogicalTable =
-  | "TRANSACTIONS" | "CATEGORIES" | "WALLETS" | "ENTITIES" | "MEMBERS";
+  | "TRANSACTIONS" | "CATEGORIES" | "SUBCATEGORIES" | "WALLETS" | "ENTITIES" | "MEMBERS";
 
 export const PHYSICAL: Record<LogicalTable, string> = {
   TRANSACTIONS: "transactions",
   CATEGORIES: "categories",
+  SUBCATEGORIES: "subcategories",
   WALLETS: "wallets",
   ENTITIES: "entities",
   MEMBERS: "members",
@@ -25,18 +26,21 @@ const GLOBAL_WRITABLE = ["id", "deleted", "is_immutable"];
 export const WRITABLE: Record<LogicalTable, Set<string>> = {
   TRANSACTIONS: new Set([
     ...GLOBAL_WRITABLE,
-    "date", "amount", "currency", "type", "category_id", "sub_category",
+    "date", "amount", "currency", "type", "category_id", "sub_category_id",
     "entity_id", "wallet_id", "member_id", "description", "tags", "status",
   ]),
   CATEGORIES: new Set([
-    ...GLOBAL_WRITABLE, "name", "type", "sub_categories", "icon", "color",
+    ...GLOBAL_WRITABLE, "name", "type", "icon", "color", "description",
+  ]),
+  SUBCATEGORIES: new Set([
+    ...GLOBAL_WRITABLE, "category_id", "name", "is_default",
   ]),
   WALLETS: new Set([
     ...GLOBAL_WRITABLE, "name", "currency", "icon", "color", "description", "is_default",
   ]),
   ENTITIES: new Set([
     ...GLOBAL_WRITABLE, "name", "aliases", "match_patterns",
-    "default_category_id", "default_sub_category", "icon", "color",
+    "default_category_id", "default_sub_category_id", "icon", "color",
   ]),
   MEMBERS: new Set([
     ...GLOBAL_WRITABLE, "name", "role", "avatar", "color",

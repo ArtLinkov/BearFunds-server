@@ -1,5 +1,5 @@
 -- RLS isolation suite — proves per-family tenancy (brain QA Area 008 Identity / 019 Isolation).
--- Run order: auth_shim.sql -> migrations 0001,0002 -> THIS. Wrapped in a rolled-back tx.
+-- Run order: auth_shim.sql -> migrations 0001-0005 -> THIS. Wrapped in a rolled-back tx.
 -- Asserts via DO/ASSERT; psql with ON_ERROR_STOP exits nonzero on the first failure.
 \set ON_ERROR_STOP on
 begin;
@@ -90,6 +90,37 @@ do $$ begin
          'family_id must not move families on update';
 end $$;
 reset role; reset request.jwt.claims;
+
+-- ============ subcategories: per-family isolation (v1.9 new tenant table) ============
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a"}';
+-- Alice creates a subcategory with family_id omitted -> server-derived to Alice.
+insert into public.subcategories (id, category_id, name) values ('sc_a1', 'c1', 'Groceries');
+do $$ begin
+  assert (select family_id from public.subcategories where id = 'sc_a1') = (select family_id from fam where who = 'A'),
+         'new subcategory must be scoped to Alice family';
+  assert (select count(*) from public.subcategories) = 1, 'Alice sees exactly her subcategory';
+end $$;
+reset role; reset request.jwt.claims;
+
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000b"}';
+do $$ begin
+  assert (select count(*) from public.subcategories) = 0, 'Bob must not see Alice subcategory (read isolation)';
+end $$;
+update public.subcategories set name = 'HACKED' where id = 'sc_a1';
+do $$ begin
+  assert not exists (select 1 from public.subcategories where id = 'sc_a1'), 'Alice subcategory stays invisible to Bob';
+end $$;
+insert into public.subcategories (id, category_id, name, family_id)
+  values ('sc_b_forge', 'c1', 'forged', (select family_id from fam where who = 'A'));
+do $$ begin
+  assert (select family_id from public.subcategories where id = 'sc_b_forge') = (select family_id from fam where who = 'B'),
+         'forged family_id must be overwritten to Bob family';
+end $$;
+reset role; reset request.jwt.claims;
+
+do $$ begin
+  assert (select name from public.subcategories where id = 'sc_a1') = 'Groceries', 'Alice subcategory must be unchanged by Bob';
+end $$;
 
 rollback;
 \echo '================================'
