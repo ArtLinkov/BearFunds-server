@@ -1,16 +1,16 @@
 <!--
-  Canonical: BearFunds-server · v1.9
+  Canonical: BearFunds-server · v1.10
   This repo is the canonical home for the shared client<->server Schema Contract
   (re-home decided in the brain's Sources of Truth, 2026-06-01; executed 2026-06-02).
   It is NOT casually editable. Any change is a deliberate version bump with a one-line
   rationale; the operator drops the versioned copy into the client (downstream consumer).
-  v1.9 (BREAKING): sub-categories elevated to a first-class SUBCATEGORIES table. TRANSACTIONS.sub_category (text) -> sub_category_id (FK); ENTITIES.default_sub_category -> default_sub_category_id; CATEGORIES.sub_categories removed. Client and server move together; one-time migration backfills the FKs.
+  v1.10 (additive, non-breaking): new STAGED_TRANSACTIONS table - a synced, RLS-scoped import staging area (the [Q15] foundation for the S7 bulk-import rework). Mirrors TRANSACTIONS but with amount as RAW TEXT and nullable FKs so partially-mapped rows persist and can be bulk-edited before promotion; adds batch_id + source_* raw columns AND a source_row JSON column (the full original import row) so the bulk-edit grid can filter on ANY source column, mapped or not. Promotion is client-orchestrated (batchCreate into TRANSACTIONS, then soft-delete the staging rows) via existing actions - no new server verb. Existing clients ignore the new table. 
 -->
-<SchemaContract version="1.9">
+<SchemaContract version="1.10">
   <Meta>
     <Description>Immutable Source of Truth for Backend API and Database Schema</Description>
     <Usage>Paste this into the AI Context before generating any API or Data Fetching code.</Usage>
-    <Canonical>BearFunds-server · v1.9</Canonical>
+    <Canonical>BearFunds-server · v1.10</Canonical>
   </Meta>
 
   <Protocol>
@@ -153,6 +153,28 @@
       <Column key="user_id" type="String" description="Auth-user link. SERVER-DERIVED, read-only: present in reads, ignored/stripped on writes. The client derives 'Me' as the member whose user_id equals the session uid." />
       <Column key="avatar" type="String" description="URL or Base64" />
       <Column key="color" type="String" />
+    </Table>
+
+    <Table name="STAGED_TRANSACTIONS" key="STAGED_TRANSACTIONS">
+      <Note>Synced import staging area. Rows are partially-mapped, possibly-invalid import candidates the client bulk-edits before promotion. On commit, valid rows are copied into TRANSACTIONS (client-orchestrated batchCreate) and the staging rows are soft-deleted. RLS-scoped by family_id like every domain table.</Note>
+      <Column key="id" type="String (UUID)" description="Primary Key." />
+      <Column key="batch_id" type="String (UUID)" description="Groups all rows from one import run; enables bulk clear/delete of a batch." />
+      <Column key="date" type="String" description="ISO YYYY-MM-DD when resolved; may be empty/unparsed while staged." />
+      <Column key="amount" type="String" description="RAW import text (may carry a leading sign or currency symbol). Parsed to a Number on promotion to TRANSACTIONS.amount. NOT a Number here, so unparsed/invalid input can persist." />
+      <Column key="currency" type="String" description="ISO code; nullable until derived from the mapped wallet." />
+      <Column key="type" type="String" description="'income' | 'expense'; nullable until the category is mapped." />
+      <Column key="category_id" type="String" description="FK -> Categories; nullable until mapped." />
+      <Column key="sub_category_id" type="String" description="FK -> SubCategories; nullable until mapped." />
+      <Column key="entity_id" type="String" description="FK -> Entities; nullable." />
+      <Column key="wallet_id" type="String" description="FK -> Wallets; nullable until mapped." />
+      <Column key="member_id" type="String" description="FK -> Members; nullable until assigned." />
+      <Column key="description" type="String" description="Notes/Memo." />
+      <Column key="tags" type="String" description="JSON string array; same convention as TRANSACTIONS.tags." />
+      <Column key="status" type="String" description="'cleared' | 'pending'; the transaction status carried through to the promoted row." />
+      <Column key="source_wallet" type="String" description="Raw source-column value for wallet, kept for re-mapping in the bulk-edit table." />
+      <Column key="source_category" type="String" description="Raw source-column value for category, kept for re-mapping." />
+      <Column key="source_name" type="String" description="Raw source-column value for the entity/name, kept for re-mapping." />
+      <Column key="source_row" type="String (JSON)" description="The full original import row as a JSON object keyed by source header. Lets the bulk-edit grid show and filter ANY source column, mapped or not (e.g. a country-code column never mapped to a target field). source_wallet/category/name remain as denormalized conveniences." />
     </Table>
   </DatabaseSchema>
 </SchemaContract>
