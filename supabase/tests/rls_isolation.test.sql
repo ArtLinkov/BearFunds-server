@@ -122,6 +122,43 @@ do $$ begin
   assert (select name from public.subcategories where id = 'sc_a1') = 'Groceries', 'Alice subcategory must be unchanged by Bob';
 end $$;
 
+-- ============ staged_transactions: per-family isolation + raw-text amount (v1.10) ============
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a"}';
+-- Alice stages a partially-mapped import row: family_id omitted -> server-derived; amount
+-- is RAW, unparsed text; FKs left null. Proves a not-yet-valid row can persist while staged.
+insert into public.staged_transactions (id, batch_id, amount, source_name, source_row)
+  values ('st_a1', 'batch_a', '-1.234,56', 'ACME / GMBH', '{"Memo":"ACME / GMBH","Value":"-1.234,56"}');
+do $$ begin
+  assert (select family_id from public.staged_transactions where id = 'st_a1') = (select family_id from fam where who = 'A'),
+         'new staged row must be scoped to Alice family';
+  assert (select count(*) from public.staged_transactions) = 1, 'Alice sees exactly her staged row';
+  assert (select amount from public.staged_transactions where id = 'st_a1') = '-1.234,56',
+         'raw unparsed amount text must persist verbatim (not coerced to numeric)';
+  assert (select category_id from public.staged_transactions where id = 'st_a1') is null,
+         'an unmapped FK may stay null while staged';
+end $$;
+reset role; reset request.jwt.claims;
+
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000b"}';
+do $$ begin
+  assert (select count(*) from public.staged_transactions) = 0, 'Bob must not see Alice staged row (read isolation)';
+end $$;
+update public.staged_transactions set source_name = 'HACKED' where id = 'st_a1';
+do $$ begin
+  assert not exists (select 1 from public.staged_transactions where id = 'st_a1'), 'Alice staged row stays invisible to Bob';
+end $$;
+insert into public.staged_transactions (id, batch_id, amount, family_id)
+  values ('st_b_forge', 'batch_b', '9', (select family_id from fam where who = 'A'));
+do $$ begin
+  assert (select family_id from public.staged_transactions where id = 'st_b_forge') = (select family_id from fam where who = 'B'),
+         'forged family_id must be overwritten to Bob family';
+end $$;
+reset role; reset request.jwt.claims;
+
+do $$ begin
+  assert (select source_name from public.staged_transactions where id = 'st_a1') = 'ACME / GMBH', 'Alice staged row must be unchanged by Bob';
+end $$;
+
 rollback;
 \echo '================================'
 \echo 'RLS ISOLATION TESTS: ALL PASSED'

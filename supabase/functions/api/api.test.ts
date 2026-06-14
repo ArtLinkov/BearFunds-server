@@ -92,3 +92,25 @@ Deno.test("empty batches are no-ops", async () => {
   assertEquals(await runAction(parseRequest({ action: "batchCreate", table: "WALLETS", rows: [] }), db, { isTest: false }), []);
   assertEquals(calls.length, 0);
 });
+
+Deno.test("STAGED_TRANSACTIONS: strips server keys, keeps writable (raw amount, source_row, FKs)", () => {
+  const req = parseRequest({
+    action: "batchCreate", table: "STAGED_TRANSACTIONS",
+    rows: [{
+      id: "st1", batch_id: "b1", amount: "-1.234,56", category_id: null,
+      source_row: '{"Memo":"x"}', family_id: "forged", updated_at: "2000", isDirty: true,
+    }],
+  });
+  if (req.action !== "batchCreate") throw new Error("wrong action");
+  assertEquals(req.rows[0], { id: "st1", batch_id: "b1", amount: "-1.234,56", category_id: null, source_row: '{"Memo":"x"}' });
+});
+
+Deno.test("STAGED_TRANSACTIONS: rejects unknown row key and read maps logical->physical", async () => {
+  assertThrows(
+    () => parseRequest({ action: "batchCreate", table: "STAGED_TRANSACTIONS", rows: [{ id: "st1", bogus: 1 }] }),
+    ValidationError, "Unknown key 'bogus'",
+  );
+  const { db, calls } = fakeDb();
+  await runAction(parseRequest({ action: "read", table: "STAGED_TRANSACTIONS" }), db, { isTest: false });
+  assertEquals(calls[0].table, "staged_transactions");
+});

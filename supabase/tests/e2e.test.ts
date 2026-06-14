@@ -85,6 +85,8 @@ Deno.test("server E2E — v1.6.0 contract + cross-family isolation", async (t) =
 
   const wA = `w_a1_${RUN}`;
   const wForge = `w_bforge_${RUN}`;
+  const stA = `st_a1_${RUN}`;
+  const tPromoted = `t_promoted_${RUN}`;
   let aliceFamily = "";
 
   await t.step("unauthenticated request is rejected", async () => {
@@ -178,5 +180,45 @@ Deno.test("server E2E — v1.6.0 contract + cross-family isolation", async (t) =
     // Tenancy still resolves after the wipe: a follow-up write must succeed.
     const c = await api(aliceJwt, { action: "batchUpsert", table: "CATEGORIES", rows: [{ id: `c_after_${RUN}`, name: "After Wipe", type: "expense" }] });
     assertEquals(c.status, "success");
+  });
+
+  await t.step("STAGED: A creates a partially-mapped staged row (raw amount, null FKs)", async () => {
+    const r = await api(aliceJwt, {
+      action: "batchCreate", table: "STAGED_TRANSACTIONS",
+      rows: [{
+        id: stA, batch_id: `b_${RUN}`, amount: "-1.234,56", source_name: "ACME / GMBH",
+        source_row: JSON.stringify({ Memo: "ACME / GMBH", Value: "-1.234,56" }),
+      }],
+    });
+    assertEquals(r.status, "success");
+    const created = rows(r)[0] as Record<string, unknown>;
+    assertEquals(created.amount, "-1.234,56", "raw amount text persists verbatim (not numeric)");
+    assertEquals(created.category_id, null, "an unmapped FK stays null while staged");
+    assert(created.family_id, "family_id is server-derived onto the staged row");
+  });
+
+  await t.step("STAGED: B cannot read A's staged rows (isolation)", async () => {
+    const r = await api(bobJwt, { action: "read", table: "STAGED_TRANSACTIONS", since: "1970-01-01T00:00:00Z" });
+    assertEquals(r.status, "success");
+    assert(!rows(r).some((s) => s.id === stA), "Bob must not see Alice's staged row");
+  });
+
+  await t.step("STAGED: client-orchestrated promotion uses existing actions (no new verb)", async () => {
+    // Promote: write the parsed row into TRANSACTIONS, then soft-delete the staging row.
+    const promote = await api(aliceJwt, {
+      action: "batchCreate", table: "TRANSACTIONS",
+      rows: [{ id: tPromoted, amount: -1234.56, currency: "EUR", type: "expense", date: "2026-06-14" }],
+    });
+    assertEquals(promote.status, "success");
+    const softDelete = await api(aliceJwt, {
+      action: "batchUpdate", table: "STAGED_TRANSACTIONS", updates: [{ id: stA, deleted: true }],
+    });
+    assertEquals(softDelete.status, "success");
+
+    const tx = await api(aliceJwt, { action: "read", table: "TRANSACTIONS", since: "1970-01-01T00:00:00Z" });
+    assert(rows(tx).some((x) => x.id === tPromoted), "promoted transaction lands in TRANSACTIONS");
+    const staged = await api(aliceJwt, { action: "read", table: "STAGED_TRANSACTIONS", since: "1970-01-01T00:00:00Z" });
+    const left = rows(staged).find((s) => s.id === stA) as Record<string, unknown> | undefined;
+    assertEquals(left?.deleted, true, "the staged row is soft-deleted after promotion");
   });
 });

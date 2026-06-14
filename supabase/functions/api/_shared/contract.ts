@@ -1,9 +1,9 @@
-// Schema Contract v1.9 — the single source of allowed tables, logical->physical
+// Schema Contract v1.10 — the single source of allowed tables, logical->physical
 // table mapping, and per-table writable column allowlists (snake_case logical keys).
 // Keys the client must never set (tenancy/sync-internal) are stripped, not errored.
 
 export type LogicalTable =
-  | "TRANSACTIONS" | "CATEGORIES" | "SUBCATEGORIES" | "WALLETS" | "ENTITIES" | "MEMBERS";
+  | "TRANSACTIONS" | "CATEGORIES" | "SUBCATEGORIES" | "WALLETS" | "ENTITIES" | "MEMBERS" | "STAGED_TRANSACTIONS";
 
 export const PHYSICAL: Record<LogicalTable, string> = {
   TRANSACTIONS: "transactions",
@@ -12,6 +12,7 @@ export const PHYSICAL: Record<LogicalTable, string> = {
   WALLETS: "wallets",
   ENTITIES: "entities",
   MEMBERS: "members",
+  STAGED_TRANSACTIONS: "staged_transactions",
 };
 
 // Server-managed / client-derived keys: silently removed from any inbound row.
@@ -44,6 +45,12 @@ export const WRITABLE: Record<LogicalTable, Set<string>> = {
   ]),
   MEMBERS: new Set([
     ...GLOBAL_WRITABLE, "name", "role", "avatar", "color",
+  ]),
+  STAGED_TRANSACTIONS: new Set([
+    ...GLOBAL_WRITABLE,
+    "batch_id", "date", "amount", "currency", "type", "category_id", "sub_category_id",
+    "entity_id", "wallet_id", "member_id", "description", "tags", "status",
+    "source_wallet", "source_category", "source_name", "source_row",
   ]),
 };
 
