@@ -10,9 +10,16 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000b', 'bob@fam.test',   '{"full_name":"Bob"}');
 
 -- Bootstrap: each user got a family + one admin member.
+-- Bootstrap asserts are scoped to the suite's two fixed uids (not whole-table
+-- counts) so the suite is order-independent: a prior sign-up on the local stack
+-- (e.g. a dev-shim user from a ghost run) no longer trips it (brain Hygiene 2026-06-05).
 do $$ begin
-  assert (select count(*) from public.families) = 2, 'expected 2 families from signup';
-  assert (select count(*) from public.members where role = 'admin' and user_id is not null) = 2, 'expected 2 admin linking members';
+  assert (select count(*) from public.members where user_id in
+            ('00000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-00000000000b')) = 2,
+         'expected the 2 suite linking members';
+  assert (select count(*) from public.members where role = 'admin' and user_id in
+            ('00000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-00000000000b')) = 2,
+         'expected 2 admin linking members for the suite uids';
   assert (select role from public.members where user_id = '00000000-0000-0000-0000-00000000000a') = 'admin', 'Alice should be admin';
 end $$;
 
