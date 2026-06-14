@@ -1,5 +1,5 @@
 // Action-handler + boundary-validation tests (pure; no network/DB).
-// Run: deno test --allow-none supabase/functions/api/api.test.ts
+// Run: deno test supabase/functions/api/api.test.ts
 import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { parseRequest, ValidationError } from "./_shared/validation.ts";
 import { DbExecutor, runAction } from "./_shared/actions.ts";
