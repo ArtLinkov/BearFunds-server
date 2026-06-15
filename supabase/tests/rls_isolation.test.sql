@@ -166,6 +166,139 @@ do $$ begin
   assert (select source_name from public.staged_transactions where id = 'st_a1') = 'ACME / GMBH', 'Alice staged row must be unchanged by Bob';
 end $$;
 
+-- ============ invites + join_family: control-plane RPCs (S9a / [Q8]) ============
+-- Two more sign-ins: Carol (joins via invite) and Dave (exercises the teardown guard).
+-- Each fires handle_new_user -> their own throwaway family + admin member.
+reset role; reset request.jwt.claims;
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-00000000000c', 'carol@fam.test', '{"full_name":"Carol"}'),
+  ('00000000-0000-0000-0000-00000000000d', 'dave@fam.test',  '{"full_name":"Dave"}');
+
+-- Snapshot Carol's + Dave's original throwaway family ids (superuser temp tables).
+create temporary table cfam as
+  select family_id from public.members where user_id = '00000000-0000-0000-0000-00000000000c';
+create temporary table dfam as
+  select family_id from public.members where user_id = '00000000-0000-0000-0000-00000000000d';
+
+-- Make Dave's family NON-solo: a second (placeholder) member. The teardown guard must
+-- therefore NOT delete Dave's family when he joins elsewhere.
+insert into public.members (id, family_id, user_id, name, role)
+  values ('m_extra_d', (select family_id from dfam), null, 'Extra D', 'member');
+
+-- Token relay table (create_invite returns the token; stash it across role switches).
+create temporary table inv (slot text primary key, token text);
+grant select, insert on inv to authenticated;
+
+-- ---- Alice (admin of A) mints invites ----
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a"}';
+insert into inv values ('i1',   public.create_invite('member'));
+insert into inv values ('i2',   public.create_invite('member'));
+insert into inv values ('i3',   public.create_invite('member'));
+insert into inv values ('iexp', public.create_invite('member'));
+-- Alice sees only her own family's invites (RLS select scope).
+do $t$ begin
+  assert (select count(*) from public.invites) = 4, 'Alice sees her 4 invites';
+end $t$;
+reset role; reset request.jwt.claims;
+
+-- Expire one invite (superuser) to test the expiry rejection.
+update public.invites set expires_at = now() - interval '1 day'
+  where token = (select token from inv where slot = 'iexp');
+
+-- ---- RLS isolation: Bob (family B) cannot see family A's invites ----
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000b"}';
+do $t$ begin
+  assert (select count(*) from public.invites) = 0, 'Bob must not see family A invites (read isolation)';
+end $t$;
+-- Invalid token is rejected.
+do $t$ begin
+  begin
+    perform public.join_family('not-a-real-token-0000000000000000');
+    raise exception 'EXPECTED join_family to reject an invalid token';
+  exception when others then
+    if sqlerrm like 'EXPECTED %' then raise; end if;
+  end;
+end $t$;
+-- Expired (still-pending) token is rejected.
+do $t$ begin
+  begin
+    perform public.join_family((select token from inv where slot = 'iexp'));
+    raise exception 'EXPECTED join_family to reject an expired invite';
+  exception when others then
+    if sqlerrm like 'EXPECTED %' then raise; end if;
+  end;
+end $t$;
+reset role; reset request.jwt.claims;
+
+-- ---- Carol joins family A via i1 (happy path: re-home + fresh member) ----
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000c"}';
+select public.join_family((select token from inv where slot = 'i1'), 'Carol Joiner', 'http://avatars.test/c.png');
+do $t$ begin
+  assert public.auth_family_id() = (select family_id from fam where who = 'A'),
+         'Carol auth_family_id() now resolves to family A';
+  assert (select role from public.members where user_id = '00000000-0000-0000-0000-00000000000c') = 'member',
+         'Carol joined as role member (not admin)';
+  assert (select name from public.members where user_id = '00000000-0000-0000-0000-00000000000c') = 'Carol Joiner',
+         'Carol member carries the Join-Form name';
+end $t$;
+reset role; reset request.jwt.claims;
+-- Superuser: Carol's throwaway family is gone; A now has exactly Alice + Carol.
+do $t$ begin
+  assert not exists (select 1 from public.families where id = (select family_id from cfam)),
+         'Carol throwaway family was torn down (sole-member)';
+  assert (select count(*) from public.members where family_id = (select family_id from fam where who = 'A')) = 2,
+         'family A now has Alice + Carol';
+end $t$;
+
+-- ---- Idempotent re-join: Carol redeems i2 while already in A -> no-op, no dup member ----
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000c"}';
+select public.join_family((select token from inv where slot = 'i2'), 'Carol Again', null);
+reset role; reset request.jwt.claims;
+do $t$ begin
+  assert (select count(*) from public.members where family_id = (select family_id from fam where who = 'A')) = 2,
+         'idempotent re-join created no duplicate member';
+  assert (select status from public.invites where token = (select token from inv where slot = 'i2')) = 'redeemed',
+         'i2 marked redeemed on idempotent join';
+end $t$;
+
+-- ---- Admin-gate: Carol (now a plain member of A) cannot mint invites ----
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000c"}';
+do $t$ begin
+  begin
+    perform public.create_invite('member');
+    raise exception 'EXPECTED create_invite to reject a non-admin member';
+  exception when others then
+    if sqlerrm like 'EXPECTED %' then raise; end if;
+  end;
+end $t$;
+reset role; reset request.jwt.claims;
+
+-- ---- Teardown guard: Dave (family D has 2 members) joins A; D must survive ----
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000d"}';
+select public.join_family((select token from inv where slot = 'i3'), 'Dave Joiner', null);
+do $t$ begin
+  assert public.auth_family_id() = (select family_id from fam where who = 'A'), 'Dave now in family A';
+end $t$;
+reset role; reset request.jwt.claims;
+do $t$ begin
+  assert exists (select 1 from public.families where id = (select family_id from dfam)),
+         'Dave family D was NOT deleted (non-solo; teardown guard held)';
+  assert (select count(*) from public.members where family_id = (select family_id from dfam)) = 1,
+         'family D keeps its other member; only Dave row was removed';
+  assert (select count(*) from public.members where family_id = (select family_id from fam where who = 'A')) = 3,
+         'family A now has Alice + Carol + Dave';
+end $t$;
+
+-- ---- Final invite-state + invariant checks ----
+do $t$ begin
+  assert (select status from public.invites where token = (select token from inv where slot = 'i1')) = 'redeemed', 'i1 redeemed';
+  assert (select status from public.invites where token = (select token from inv where slot = 'i3')) = 'redeemed', 'i3 redeemed';
+  assert (select status from public.invites where token = (select token from inv where slot = 'iexp')) = 'pending',
+         'expired invite was never redeemed (stays pending)';
+  assert (select role from public.members where user_id = '00000000-0000-0000-0000-00000000000a') = 'admin',
+         'Alice remains admin of family A';
+end $t$;
+
 rollback;
 \echo '================================'
 \echo 'RLS ISOLATION TESTS: ALL PASSED'
