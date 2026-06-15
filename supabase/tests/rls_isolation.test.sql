@@ -299,6 +299,67 @@ do $t$ begin
          'Alice remains admin of family A';
 end $t$;
 
+-- ============ peek_invite: token-gated family-name disclosure (S9b-2) ============
+-- A fresh pending invite minted by Alice (admin of A) must be peekable by Bob, who is
+-- NOT a member of A - proving a not-yet-member joiner can read the family name.
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a"}';
+insert into inv values ('ipeek', public.create_invite('member'));
+reset role; reset request.jwt.claims;
+
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000b"}';
+do $t$
+declare v_name text; v_role text;
+begin
+  select family_name, invite_role into v_name, v_role
+    from public.peek_invite((select token from inv where slot = 'ipeek'));
+  assert v_name = 'Alice''s Family', 'peek returns the inviting family name; got ' || coalesce(v_name, '<null>');
+  assert v_role = 'member', 'peek returns the invite role';
+end $t$;
+-- Expired invite -> no rows.
+do $t$
+declare n int;
+begin
+  select count(*) into n from public.peek_invite((select token from inv where slot = 'iexp'));
+  assert n = 0, 'peek returns nothing for an expired invite';
+end $t$;
+-- Unknown token -> no rows.
+do $t$
+declare n int;
+begin
+  select count(*) into n from public.peek_invite('no-such-token-0000000000000000');
+  assert n = 0, 'peek returns nothing for an unknown token';
+end $t$;
+reset role; reset request.jwt.claims;
+
+-- ============ composite (family_id, id) PK: families share fixed seed ids ([Q20]) ============
+-- Alice and Bob (different families) each "seed" the SAME fixed category id. Under the old
+-- global PK the 2nd insert collided with the 1st family's row (RLS-denied 500); under
+-- (family_id, id) it does not. Uses the EXACT upsert shape PostgREST emits: ON CONFLICT
+-- (family_id, id) with family_id ABSENT from the insert column list (set by the trigger).
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a"}';
+insert into public.categories (id, name) values ('c001', 'Alice Food')
+  on conflict (family_id, id) do update set name = excluded.name;
+do $t$ begin
+  assert (select name from public.categories where id = 'c001') = 'Alice Food', 'Alice c001 seeded';
+end $t$;
+reset role; reset request.jwt.claims;
+
+set role authenticated; set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000b"}';
+-- Must NOT collide with Alice's (A, c001) - lands as Bob's own (B, c001).
+insert into public.categories (id, name) values ('c001', 'Bob Food')
+  on conflict (family_id, id) do update set name = excluded.name;
+do $t$ begin
+  assert (select name from public.categories where id = 'c001') = 'Bob Food', 'Bob c001 is his own row';
+  assert (select count(*) from public.categories where id = 'c001') = 1, 'Bob sees only his c001 (RLS)';
+end $t$;
+reset role; reset request.jwt.claims;
+
+do $t$ begin
+  assert (select count(*) from public.categories where id = 'c001') = 2, 'both families hold a c001 row';
+  assert (select name from public.categories where id='c001' and family_id=(select family_id from fam where who='A')) = 'Alice Food', 'Alice c001 unchanged by Bob';
+  assert (select name from public.categories where id='c001' and family_id=(select family_id from fam where who='B')) = 'Bob Food', 'Bob c001 distinct from Alice';
+end $t$;
+
 rollback;
 \echo '================================'
 \echo 'RLS ISOLATION TESTS: ALL PASSED'
