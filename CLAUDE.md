@@ -25,6 +25,7 @@ This is the **server** of BearFunds ("Sweet Savings For Families") — the backe
 
 ## Critical guardrails
 
+- **Operator runs commands in PowerShell (Windows), not bash.** Write every operator-facing hand-off command (git, npm, builds, tests, curl, file ops) in PowerShell syntax (`Copy-Item`/`copy` not `cp`, `$env:VAR=...` not `export`, backtick line-continuation, `;`/newlines not `&&`, `Invoke-RestMethod`/`curl.exe` not bare `curl`). The Linux-sandbox commands Claude runs itself stay bash. (Brain CLAUDE.md convention, v1.6.)
 - **Never** write secrets into the repo or commits; **never** overwrite `.env*`. New key needed → say so in chat.
 - **Never** change the wire shape implicitly — `2_SCHEMA_CONTRACT.xml` changes are deliberate, versioned, and propagated to the client.
 - **Never** trust a client-supplied `family_id`/`user_id`; derive tenancy from the session. RLS on every tenant table is the backstop, and isolation must be tested directly.
