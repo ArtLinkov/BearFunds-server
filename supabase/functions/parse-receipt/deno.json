@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@1",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+  }
+}

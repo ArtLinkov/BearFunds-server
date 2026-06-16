@@ -29,6 +29,9 @@ jobs:
       - name: Edge Function action/validation suite
         run: deno test supabase/functions/api/api.test.ts
 
+      - name: parse-receipt handler suite
+        run: deno test supabase/functions/parse-receipt/parse-receipt.test.ts
+
   integration:
     runs-on: ubuntu-latest
     steps:
