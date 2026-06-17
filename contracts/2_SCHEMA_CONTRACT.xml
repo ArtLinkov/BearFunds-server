@@ -1,16 +1,16 @@
 <!--
-  Canonical: BearFunds-server · v1.10
+  Canonical: BearFunds-server · v1.11
   This repo is the canonical home for the shared client<->server Schema Contract
   (re-home decided in the brain's Sources of Truth, 2026-06-01; executed 2026-06-02).
   It is NOT casually editable. Any change is a deliberate version bump with a one-line
   rationale; the operator drops the versioned copy into the client (downstream consumer).
-  v1.10 (additive, non-breaking): new STAGED_TRANSACTIONS table - a synced, RLS-scoped import staging area (the [Q15] foundation for the S7 bulk-import rework). Mirrors TRANSACTIONS but with amount as RAW TEXT and nullable FKs so partially-mapped rows persist and can be bulk-edited before promotion; adds batch_id + source_* raw columns AND a source_row JSON column (the full original import row) so the bulk-edit grid can filter on ANY source column, mapped or not. Promotion is client-orchestrated (batchCreate into TRANSACTIONS, then soft-delete the staging rows) via existing actions - no new server verb. Existing clients ignore the new table. 
+  v1.11 (additive, non-breaking): MEMBERS gains google_avatar - a server-managed, read-only column holding the Google sign-in photo, separated from the user-set 'avatar' (now custom-only). Render precedence custom -> google -> initials, so the Google photo is a default that never overwrites a custom avatar. Written by handle_new_user; never accepted on writes (not in the API WRITABLE set). Existing clients ignore the new column. 
 -->
-<SchemaContract version="1.10">
+<SchemaContract version="1.11">
   <Meta>
     <Description>Immutable Source of Truth for Backend API and Database Schema</Description>
     <Usage>Paste this into the AI Context before generating any API or Data Fetching code.</Usage>
-    <Canonical>BearFunds-server · v1.10</Canonical>
+    <Canonical>BearFunds-server · v1.11</Canonical>
   </Meta>
 
   <Protocol>
@@ -152,6 +152,7 @@
       <Column key="role" type="String" description="'admin', 'member'" />
       <Column key="user_id" type="String" description="Auth-user link. SERVER-DERIVED, read-only: present in reads, ignored/stripped on writes. The client derives 'Me' as the member whose user_id equals the session uid." />
       <Column key="avatar" type="String" description="URL or Base64" />
+      <Column key="google_avatar" type="String" description="Google sign-in photo. SERVER-MANAGED, read-only: written by the sign-in trigger (handle_new_user), present in reads, ignored/stripped on writes. Render precedence is custom avatar -> google_avatar -> generated initials, so it is a default that never overwrites a custom avatar." />
       <Column key="color" type="String" />
     </Table>
 

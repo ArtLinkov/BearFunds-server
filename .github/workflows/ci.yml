@@ -54,5 +54,8 @@ jobs:
       - name: RLS isolation suite
         run: bash supabase/tests/run_rls.sh
 
+      - name: google_avatar suite
+        run: bash supabase/tests/run_google_avatar.sh
+
       - name: E2E harness (live function + DB + RLS over HTTP)
         run: bash supabase/tests/run_e2e.sh

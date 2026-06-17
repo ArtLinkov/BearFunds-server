@@ -159,12 +159,13 @@ Deno.test("server E2E — v1.6.0 contract + cross-family isolation", async (t) =
     assert(rows(a).some((w) => w.id === wA), "Bob's wipe must not clear Alice's wallet");
   });
 
-  await t.step("linking member is born with the sign-up avatar (0003)", async () => {
+  await t.step("linking member's sign-up photo lands in google_avatar, not avatar (0010)", async () => {
     const r = await api(aliceJwt, { action: "read", table: "MEMBERS", since: "1970-01-01T00:00:00Z" });
     assertEquals(r.status, "success");
     const linking = rows(r).find((m) => (m as Record<string, unknown>).user_id === aliceId);
     assert(linking, "Alice's linking member must exist");
-    assertEquals((linking as Record<string, unknown>).avatar, ALICE_AVATAR, "avatar_url metadata must land on the linking member");
+    assertEquals((linking as Record<string, unknown>).google_avatar, ALICE_AVATAR, "avatar_url metadata must land on google_avatar (server-managed default)");
+    assertEquals((linking as Record<string, unknown>).avatar ?? null, null, "avatar stays null at sign-up (custom-only)");
   });
 
   await t.step("wipe MEMBERS preserves the account-linking member (tenancy survives)", async () => {
