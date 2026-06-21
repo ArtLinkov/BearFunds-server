@@ -1,4 +1,4 @@
-// Schema Contract v1.10 — the single source of allowed tables, logical->physical
+// Schema Contract v1.11 - the single source of allowed tables, logical->physical
 // table mapping, and per-table writable column allowlists (snake_case logical keys).
 // Keys the client must never set (tenancy/sync-internal) are stripped, not errored.
 

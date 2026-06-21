@@ -3,7 +3,7 @@
 // server-derived by the DB (trigger + RLS); this function never reads a family_id from
 // the body. Envelope: { status: 'success' | 'error', data | message }.
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { CORS, json, requireUser, isAuthed } from "../_shared/http.ts";
+import { CORS, json, requireUser, isAuthed, testScopedClient } from "../_shared/http.ts";
 import { parseRequest, ValidationError } from "./_shared/validation.ts";
 import { DbExecutor, runAction } from "./_shared/actions.ts";
 
@@ -64,7 +64,16 @@ Deno.serve(async (req: Request) => {
   try {
     const request = parseRequest(body);
     const isTest = (body as { isTest?: unknown }).isTest === true;
-    const data = await runAction(request, makeExecutor(auth.supabase), { isTest });
+    // Test context: provision the caller's test family (idempotent), then run the action
+    // through a client carrying the `x-bf-test` header so DB tenancy resolves to that test
+    // family (migration 0011). The non-test path is unchanged.
+    let supabase = auth.supabase;
+    if (isTest) {
+      const { error: provisionError } = await auth.supabase.rpc("ensure_test_family");
+      if (provisionError) throw new Error(provisionError.message);
+      supabase = testScopedClient(req);
+    }
+    const data = await runAction(request, makeExecutor(supabase), { isTest });
     return json({ status: "success", data });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error.";

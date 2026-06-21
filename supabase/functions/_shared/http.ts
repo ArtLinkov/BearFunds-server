@@ -45,3 +45,21 @@ export async function requireUser(req: Request): Promise<Response | AuthResult> 
 export function isAuthed(r: Response | AuthResult): r is AuthResult {
   return (r as AuthResult).supabase !== undefined;
 }
+
+// An RLS-bound client that also flags the request as TEST context via the `x-bf-test`
+// header. The Edge Function builds this ONLY when the validated body flag isTest=true.
+// PostgREST forwards the header into the request.headers GUC, where auth_family_id()
+// (migration 0011) routes the caller to their per-user test family. The header is server-set
+// from a validated flag, and the test family is keyed to auth.uid(), so a caller can only ever
+// reach their OWN test family -- never another tenant's data.
+export function testScopedClient(req: Request): SupabaseClient {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    {
+      global: { headers: { Authorization: authHeader, "x-bf-test": "1" } },
+      auth: { persistSession: false },
+    },
+  );
+}
